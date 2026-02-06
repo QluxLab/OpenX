@@ -3,9 +3,10 @@ from pydantic import BaseModel
 class NewTokenRequest(BaseModel):
     username: str
 
-class RotateTokenRequest(BaseModel):
+class RecoveryTokenRequest(BaseModel):
     sk: str
     rk: str
 
-class NewTokenRespone(BaseModel):
+class NewTokenResponse(BaseModel):
     sk: str
+    rk: str

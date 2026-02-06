@@ -3,8 +3,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from core.db.tables.base import Base
 
 
-class SecretKey(Base):
+class RecoveryKey(Base):
     __tablename__ = "recovery_key"
 
-    rk: Mapped[str] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(30))
+    rk: Mapped[str] = mapped_column(primary_key=True, unique=True)
+    username: Mapped[str] = mapped_column(String(256))
