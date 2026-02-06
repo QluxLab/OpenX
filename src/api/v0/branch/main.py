@@ -8,7 +8,7 @@ def new_branch():
     pass
 
 
-@router.post("/{branch}/new_post")
+@router.post("/{branch}/posts")
 def create_branch_post(branch: str):
     pass
 
