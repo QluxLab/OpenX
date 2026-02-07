@@ -7,6 +7,7 @@ from pydantic import Field, BaseModel
 
 class PostBase(BaseModel):
     content: str = Field(..., min_length=1, max_length=4096)
+    to_branch: str | None = Field(None, max_length=256, description="Target branch name; None means user profile")
 
 class TextPostCreate(PostBase):
     """Request schema for creating text posts"""
@@ -65,11 +66,13 @@ class VideoPostUpdate(PostUpdate):
     duration_seconds: int | None = Field(None, ge=0)
 
 
-class PostResponse(PostBase):
+class PostResponse(BaseModel):
     """Base response with common fields"""
 
     id: int
     type: str
+    content: str
+    branch: str | None = None  # Where the post actually lives
     created_at: datetime
     updated_at: datetime | None = None
 

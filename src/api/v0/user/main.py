@@ -1,5 +1,6 @@
 from sqlalchemy import select
 from src.core.db.tables.userpost import UserPost
+from src.core.db.tables.branch import Branch
 from sqlalchemy.orm import Session
 from src.core.db.session import get_current_user, get_db
 from src.core.db.tables.secretkey import SecretKey
@@ -9,8 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 router = APIRouter(prefix="/user")
 
 
-
-def get_post(session, post_id):
+def get_post_or_404(session, post_id):
     post = session.execute(select(UserPost).where(UserPost.id == post_id)).scalar()
 
     if not post:
@@ -19,6 +19,20 @@ def get_post(session, post_id):
             detail="Post not found",
         )
     return post
+
+
+def validate_branch_exists(session: Session, branch_name: str) -> None:
+    """Validate that a branch exists, raise 404 if not"""
+    branch = session.execute(
+        select(Branch).where(Branch.name == branch_name)
+    ).scalar()
+    
+    if not branch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Branch '{branch_name}' does not exist. Create it first at POST /branch/create",
+        )
+
 
 @router.post(
     "/posts/", response_model=PostResponseUnion, status_code=status.HTTP_201_CREATED
@@ -36,9 +50,18 @@ def create_user_post(
             detail=f"Unknown post type: {post_data.type}",
         )
 
+    # Extract to_branch and map it to branch column
+    post_dict = post_data.model_dump()
+    to_branch = post_dict.pop('to_branch', None)
+    
+    # Validate branch exists if posting to a branch
+    if to_branch is not None:
+        validate_branch_exists(session, to_branch)
+    
     post = model_class(
-        **post_data.model_dump(),
+        **post_dict,
         username=current_user.username,
+        branch=to_branch,  # None means user profile, string means specific branch
     )
 
     session.add(post)
@@ -57,7 +80,7 @@ def update_post(
     """
     Update a post partially.
     """
-    post = get_post(session,post_id)
+    post = get_post_or_404(session, post_id)
 
     if post.username != current_user.username:
         raise HTTPException(
@@ -78,10 +101,21 @@ def update_post(
 def get_user_posts(
     username: str,
     post_type: str | None = None,
+    include_branch_posts: bool = False,
     session: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
 ):
+    """
+    Get posts from a user's profile.
+    
+    Args:
+        username: The username to get posts for
+        post_type: Filter by post type (text, image, video)
+        include_branch_posts: If True, includes posts made to branches. If False (default), only profile posts
+        skip: Number of posts to skip (pagination)
+        limit: Maximum number of posts to return
+    """
     model_class = get_post_model(post_type) if post_type else UserPost
 
     if post_type and not model_class:
@@ -90,10 +124,15 @@ def get_user_posts(
             detail=f"Unknown post type: {post_type}",
         )
 
+    query = select(model_class).where(model_class.username == username)
+    
+    if not include_branch_posts:
+        # Only get profile posts (where branch is None)
+        query = query.where(model_class.branch.is_(None))
+    
     posts = (
         session.execute(
-            select(model_class)
-            .where(model_class.username == username)
+            query
             .offset(skip)
             .limit(limit)
         )
@@ -109,7 +148,7 @@ def get_post_by_id(
     post_id: int,
     session: Session = Depends(get_db),
 ):
-    post = get_post(session, post_id)
+    post = get_post_or_404(session, post_id)
 
     return get_response_schema(post)
 
@@ -119,7 +158,7 @@ def delete_post(
     session: Session = Depends(get_db),
     current_user: SecretKey = Depends(get_current_user),
 ):
-    post = get_post(session, post_id)
+    post = get_post_or_404(session, post_id)
 
     if post.username != current_user.username:
         raise HTTPException(
@@ -128,4 +167,3 @@ def delete_post(
         )
     session.delete(post)
     session.commit()
-

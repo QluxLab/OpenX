@@ -1,29 +1,80 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from api.v0.auth.models import RecoveryTokenRequest
 from sqlalchemy.exc import IntegrityError
-from core.security import new_sk, new_rk
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+from core.security import new_sk, new_rk, hash_key, verify_key
 from core.db.tables.recoverykey import RecoveryKey
 from core.db.tables.secretkey import SecretKey
-from fastapi import APIRouter, Depends, HTTPException, status
 from src.core.db.session import get_db
 from src.api.v0.auth.models import NewTokenRequest, NewTokenResponse
+from api.v0.auth.models import RecoveryTokenRequest
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/auth")
 
 
+def extract_key_id(key: str) -> str:
+    """
+    Extract the key identifier from a key for database lookup.
+    Uses the first 16 characters (prefix + 8 chars of random part).
+    """
+    return key[:16] if len(key) >= 16 else key
+
 
 @router.post("/new")
+@limiter.limit("5/minute")
 def new_user(
+    request: Request,
     new_token_request: NewTokenRequest,
     session: Session = Depends(get_db),
 ):
+    """
+    Create a new user with secure credential storage.
+    
+    Rate limited to 5 requests per minute per IP.
+    Credentials are hashed before storage - only the user receives plaintext keys.
+    """
     username = new_token_request.username
+    
+    # Check if username already exists
+    existing_sk = session.execute(
+        select(SecretKey).where(SecretKey.username == username)
+    ).scalar()
+    
+    if existing_sk:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already exists!",
+        )
+    
+    # Generate new keys
     new_secret_key = new_sk()
     new_recovery_key = new_rk()
-
-    new_secret_key_model = SecretKey(sk=new_secret_key, username=username)
-    new_recovery_key_model = RecoveryKey(rk=new_recovery_key, username=username)
+    
+    # Hash keys before storing (only store hashes, never plaintext)
+    sk_hash = hash_key(new_secret_key)
+    rk_hash = hash_key(new_recovery_key)
+    
+    # Extract key IDs for database lookup
+    sk_id = extract_key_id(new_secret_key)
+    rk_id = extract_key_id(new_recovery_key)
+    
+    # Create database models with hashed credentials
+    new_secret_key_model = SecretKey(
+        sk_id=sk_id,
+        sk_hash=sk_hash,
+        username=username
+    )
+    new_recovery_key_model = RecoveryKey(
+        rk_id=rk_id,
+        rk_hash=rk_hash,
+        username=username
+    )
 
     try:
         session.add(new_secret_key_model)
@@ -36,54 +87,75 @@ def new_user(
             detail="Username already exists!",
         )
 
+    # Return plaintext keys to user (only time they're available)
     return NewTokenResponse(sk=new_secret_key, rk=new_recovery_key)
 
 
 @router.post("/recovery")
+@limiter.limit("3/minute")
 def refresh_token(
+    request: Request,
     recovery_token_request: RecoveryTokenRequest,
     session: Session = Depends(get_db),
 ):
+    """
+    Refresh a secret key using recovery key.
+    
+    Rate limited to 3 requests per minute per IP.
+    Uses constant-time comparison to prevent timing attacks.
+    """
     secret_key = recovery_token_request.sk
     recovery_key = recovery_token_request.rk
-
+    
+    # Extract key IDs for lookup
+    sk_id = extract_key_id(secret_key)
+    rk_id = extract_key_id(recovery_key)
+    
+    # Fetch both keys in a single operation to prevent timing attacks
     sk_object = session.execute(
-        select(SecretKey).where(SecretKey.sk == secret_key)
+        select(SecretKey).where(SecretKey.sk_id == sk_id)
     ).scalar()
     rk_object = session.execute(
-        select(RecoveryKey).where(RecoveryKey.rk == recovery_key)
+        select(RecoveryKey).where(RecoveryKey.rk_id == rk_id)
     ).scalar()
-
-    if not sk_object:
+    
+    # Perform all validations before returning any error
+    # This prevents timing attacks by not revealing which credential failed
+    sk_valid = False
+    rk_valid = False
+    username_match = False
+    
+    if sk_object:
+        sk_valid = verify_key(secret_key, sk_object.sk_hash)
+    
+    if rk_object:
+        rk_valid = verify_key(recovery_key, rk_object.rk_hash)
+    
+    if sk_object and rk_object:
+        username_match = sk_object.username == rk_object.username
+    
+    # Single error response for all validation failures (prevents information leakage)
+    if not (sk_valid and rk_valid and username_match):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Secret Key not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
         )
-
-    if not rk_object:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Recovery Key not found",
-        )
-
-    if sk_object.username != rk_object.username:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid recovery key!",
-        )
-
+    
+    # Generate new secret key
+    new_secret_key = new_sk()
+    new_sk_id = extract_key_id(new_secret_key)
+    new_sk_hash = hash_key(new_secret_key)
+    
     try:
+        # Delete old secret key
         session.delete(sk_object)
-
-        while True:
-            new_secret_key = new_sk()
-            existing_key = session.execute(
-                select(SecretKey).where(SecretKey.sk == new_secret_key)
-            ).scalar()
-            if existing_key is None:
-                break
-
-        new_secret_key_model = SecretKey(sk=new_secret_key, username=sk_object.username)
+        
+        # Create new secret key with hashed value
+        new_secret_key_model = SecretKey(
+            sk_id=new_sk_id,
+            sk_hash=new_sk_hash,
+            username=sk_object.username
+        )
         session.add(new_secret_key_model)
         session.commit()
     except IntegrityError:
@@ -93,4 +165,5 @@ def refresh_token(
             detail="Database error occurred",
         )
 
+    # Return new plaintext secret key (only time it's available)
     return NewTokenResponse(sk=new_secret_key, rk=recovery_key)

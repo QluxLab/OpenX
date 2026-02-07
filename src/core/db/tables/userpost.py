@@ -1,6 +1,7 @@
 from sqlalchemy import String, Integer
 from sqlalchemy.orm import Mapped, mapped_column
-from core.db.tables.base import Base
+
+from src.core.db.tables.base import Base
 
 
 class UserPost(Base):
@@ -13,6 +14,9 @@ class UserPost(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, unique=True)
     username: Mapped[str] = mapped_column(String(256))
     content: Mapped[str] = mapped_column(String(4096))
+    
+    # Branch field - None means post belongs to user's profile
+    branch: Mapped[str | None] = mapped_column(String(256), nullable=True, default=None, index=True)
 
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     video_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
