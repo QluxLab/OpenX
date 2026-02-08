@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenX - Media</title>
+</head>
+<body>
+    <header>
+        <h1>OpenX</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="register.html">Register</a>
+            <a href="login.html">Login</a>
+            <a href="profile.html">Profile</a>
+            <a href="posts.html">Posts</a>
+            <a href="media.html">Media</a>
+        </nav>
+    </header>
+
+    <main>
+        <section>
+            <h2>Upload Media</h2>
+
+            <div id="authWarning" style="display: none;">
+                <p style="color: orange;">Warning: You are not authenticated. Please <a href="login.html">login</a> first to upload media.</p>
+            </div>
+
+            <form id="uploadForm">
+                <div>
+                    <label for="fileInput">Select File:</label>
+                    <br>
+                    <input type="file" id="fileInput" name="file" required>
+                </div>
+                <br>
+                <p><strong>Allowed File Types:</strong></p>
+                <ul>
+                    <li>Images: JPEG, PNG, GIF, WebP (max 10MB)</li>
+                    <li>Videos: MP4, WebM, OGG (max 100MB)</li>
+                </ul>
+                <br>
+                <button type="submit">Upload</button>
+            </form>
+
+            <div id="uploadResult" style="display: none;">
+                <h3>Upload Successful!</h3>
+                <p><strong>Media ID:</strong> <span id="uploadMediaId"></span></p>
+                <p><strong>URL:</strong> <a id="uploadUrl" href="" target="_blank"></a></p>
+                <p><strong>Type:</strong> <span id="uploadType"></span></p>
+                <p><strong>Size:</strong> <span id="uploadSize"></span> bytes</p>
+            </div>
+
+            <div id="uploadError" style="display: none; color: red;">
+                <p id="uploadErrorMessage"></p>
+            </div>
+        </section>
+
+        <hr>
+
+        <section>
+            <h2>Your Media</h2>
+
+            <button type="button" onclick="loadMediaList()">Load My Media</button>
+
+            <div id="mediaList"></div>
+        </section>
+
+        <hr>
+
+        <section>
+            <h2>Get Media Info</h2>
+
+            <form id="getMediaForm">
+                <div>
+                    <label for="getMediaId">Media ID:</label>
+                    <br>
+                    <input type="text" id="getMediaId" name="getMediaId" required>
+                </div>
+                <br>
+                <button type="submit">Get Info</button>
+            </form>
+
+            <div id="mediaInfo"></div>
+        </section>
+
+        <hr>
+
+        <section>
+            <h2>Delete Media</h2>
+
+            <form id="deleteMediaForm">
+                <div>
+                    <label for="deleteMediaId">Media ID:</label>
+                    <br>
+                    <input type="text" id="deleteMediaId" name="deleteMediaId" required>
+                </div>
+                <br>
+                <button type="submit" onclick="return confirm('Are you sure you want to delete this media?')">Delete Media</button>
+            </form>
+
+            <div id="deleteMediaResult" style="display: none;">
+                <p style="color: green;">Media deleted successfully!</p>
+            </div>
+
+            <div id="deleteMediaError" style="display: none; color: red;">
+                <p id="deleteMediaErrorMessage"></p>
+            </div>
+        </section>
+
+        <section>
+            <h3>API Details</h3>
+            <h4>Upload Media</h4>
+            <p><strong>Endpoint:</strong> POST /api/media/upload</p>
+            <p><strong>Auth:</strong> Requires X-Secret-Key header</p>
+            <p><strong>Request:</strong> Multipart form with file field</p>
+            <p><strong>Rate Limit:</strong> 20 requests/minute per IP</p>
+
+            <h4>List Media</h4>
+            <p><strong>Endpoint:</strong> GET /api/media/list</p>
+            <p><strong>Auth:</strong> Requires X-Secret-Key header</p>
+
+            <h4>Get Media Info</h4>
+            <p><strong>Endpoint:</strong> GET /api/media/{media_id}</p>
+            <p><strong>Auth:</strong> None required (public)</p>
+
+            <h4>Delete Media</h4>
+            <p><strong>Endpoint:</strong> DELETE /api/media/{media_id}</p>
+            <p><strong>Auth:</strong> Requires X-Secret-Key header (must be owner)</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 OpenX</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const secretKey = sessionStorage.getItem('secretKey');
+            if (!secretKey) {
+                document.getElementById('authWarning').style.display = 'block';
+            }
+        });
+
+        function getSecretKey() {
+            return sessionStorage.getItem('secretKey');
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const secretKey = getSecretKey();
+            if (!secretKey) {
+                alert('Please login first!');
+                return;
+            }
+
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/media/upload', {
+                    method: 'POST',
+                    headers: {
+                        'X-Secret-Key': secretKey
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('uploadMediaId').textContent = data.id;
+                    document.getElementById('uploadUrl').textContent = data.url;
+                    document.getElementById('uploadUrl').href = data.url;
+                    document.getElementById('uploadType').textContent = data.media_type;
+                    document.getElementById('uploadSize').textContent = data.size_bytes;
+                    document.getElementById('uploadResult').style.display = 'block';
+                    document.getElementById('uploadError').style.display = 'none';
+                } else {
+                    document.getElementById('uploadErrorMessage').textContent = data.detail || 'Failed to upload media';
+                    document.getElementById('uploadError').style.display = 'block';
+                    document.getElementById('uploadResult').style.display = 'none';
+                }
+            } catch (error) {
+                document.getElementById('uploadErrorMessage').textContent = 'Network error: ' + error.message;
+                document.getElementById('uploadError').style.display = 'block';
+            }
+        });
+
+        async function loadMediaList() {
+            const secretKey = getSecretKey();
+            if (!secretKey) {
+                alert('Please login first!');
+                return;
+            }
+
+            const mediaListDiv = document.getElementById('mediaList');
+            mediaListDiv.innerHTML = '<p>Loading...</p>';
+
+            try {
+                const response = await fetch('/api/media/list', {
+                    headers: {
+                        'X-Secret-Key': secretKey
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.length === 0) {
+                        mediaListDiv.innerHTML = '<p>No media found.</p>';
+                        return;
+                    }
+
+                    let html = '<h4>Your Media Files</h4><ul>';
+                    data.forEach(media => {
+                        html += `<li>
+                            <strong>ID:</strong> ${media.id}<br>
+                            <strong>Filename:</strong> ${media.filename}<br>
+                            <strong>Type:</strong> ${media.media_type}<br>
+                            <strong>Size:</strong> ${media.size_bytes} bytes<br>
+                            <strong>URL:</strong> <a href="${media.url}" target="_blank">${media.url}</a><br>
+                            <strong>Created:</strong> ${media.created_at}
+                        </li>`;
+                    });
+                    html += '</ul>';
+                    mediaListDiv.innerHTML = html;
+                } else {
+                    mediaListDiv.innerHTML = `<p style="color: red;">Error: ${data.detail || 'Failed to load media list'}</p>`;
+                }
+            } catch (error) {
+                mediaListDiv.innerHTML = `<p style="color: red;">Network error: ${error.message}</p>`;
+            }
+        }
+
+        document.getElementById('getMediaForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const mediaId = document.getElementById('getMediaId').value;
+            const mediaInfoDiv = document.getElementById('mediaInfo');
+            mediaInfoDiv.innerHTML = '<p>Loading...</p>';
+
+            try {
+                const response = await fetch(`/api/media/${mediaId}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    mediaInfoDiv.innerHTML = `
+                        <h4>Media Info</h4>
+                        <p><strong>ID:</strong> ${data.id}</p>
+                        <p><strong>Filename:</strong> ${data.filename}</p>
+                        <p><strong>Type:</strong> ${data.media_type}</p>
+                        <p><strong>Content Type:</strong> ${data.content_type}</p>
+                        <p><strong>Size:</strong> ${data.size_bytes} bytes</p>
+                        <p><strong>URL:</strong> <a href="${data.url}" target="_blank">${data.url}</a></p>
+                        <p><strong>Created:</strong> ${data.created_at}</p>
+                    `;
+                } else {
+                    mediaInfoDiv.innerHTML = `<p style="color: red;">Error: ${data.detail || 'Media not found'}</p>`;
+                }
+            } catch (error) {
+                mediaInfoDiv.innerHTML = `<p style="color: red;">Network error: ${error.message}</p>`;
+            }
+        });
+
+        document.getElementById('deleteMediaForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const secretKey = getSecretKey();
+            if (!secretKey) {
+                alert('Please login first!');
+                return;
+            }
+
+            const mediaId = document.getElementById('deleteMediaId').value;
+
+            try {
+                const response = await fetch(`/api/media/${mediaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Secret-Key': secretKey
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('deleteMediaResult').style.display = 'block';
+                    document.getElementById('deleteMediaError').style.display = 'none';
+                } else {
+                    document.getElementById('deleteMediaErrorMessage').textContent = data.detail || 'Failed to delete media';
+                    document.getElementById('deleteMediaError').style.display = 'block';
+                    document.getElementById('deleteMediaResult').style.display = 'none';
+                }
+            } catch (error) {
+                document.getElementById('deleteMediaErrorMessage').textContent = 'Network error: ' + error.message;
+                document.getElementById('deleteMediaError').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

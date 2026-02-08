@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenX - Login / Key Recovery</title>
+</head>
+<body>
+    <header>
+        <h1>OpenX</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="register.html">Register</a>
+            <a href="login.html">Login</a>
+            <a href="profile.html">Profile</a>
+            <a href="posts.html">Posts</a>
+            <a href="media.html">Media</a>
+        </nav>
+    </header>
+
+    <main>
+        <section>
+            <h2>Access Your Account</h2>
+            <p>Enter your Secret Key to authenticate. Your key is stored locally in this session.</p>
+
+            <form id="loginForm">
+                <div>
+                    <label for="secretKey">Secret Key:</label>
+                    <br>
+                    <input type="password" id="secretKey" name="secretKey" required>
+                </div>
+                <br>
+                <button type="submit">Store Key</button>
+            </form>
+
+            <div id="loginStatus" style="display: none;">
+                <p style="color: green;">Secret key stored in session. You can now access protected features.</p>
+                <p>Current key (hidden): <span id="keyPreview">****</span></p>
+                <a href="profile.html">Go to Profile</a> |
+                <a href="posts.html">Create Post</a>
+            </div>
+        </section>
+
+        <section>
+            <h2>Recover Secret Key</h2>
+            <p>If you lost your secret key, you can generate a new one using your recovery key.</p>
+
+            <form id="recoveryForm">
+                <div>
+                    <label for="currentSk">Current Secret Key (if known, optional):</label>
+                    <br>
+                    <input type="password" id="currentSk" name="currentSk">
+                </div>
+                <br>
+                <div>
+                    <label for="recoveryKey">Recovery Key:</label>
+                    <br>
+                    <input type="password" id="recoveryKey" name="recoveryKey" required>
+                </div>
+                <br>
+                <button type="submit">Recover Key</button>
+            </form>
+
+            <div id="recoveryResult" style="display: none;">
+                <h3>Recovery Successful!</h3>
+                <p><strong>New Secret Key:</strong></p>
+                <input type="text" id="newSecretKey" readonly>
+                <button type="button" onclick="copyNewKey()">Copy</button>
+                <button type="button" onclick="useNewKey()">Use This Key</button>
+            </div>
+
+            <div id="recoveryError" style="display: none; color: red;">
+                <p id="recoveryErrorMessage"></p>
+            </div>
+        </section>
+
+        <section>
+            <h3>API Details</h3>
+            <h4>Authentication</h4>
+            <p>All protected endpoints require the <code>X-Secret-Key</code> header.</p>
+
+            <h4>Recovery Endpoint</h4>
+            <p><strong>Endpoint:</strong> POST /api/auth/recovery</p>
+            <p><strong>Request Body:</strong></p>
+            <pre>
+{
+    "sk": "current_or_old_secret_key",
+    "rk": "recovery_key"
+}
+            </pre>
+            <p><strong>Response:</strong></p>
+            <pre>
+{
+    "sk": "new_secret_key",
+    "rk": "recovery_key"
+}
+            </pre>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 OpenX</p>
+    </footer>
+
+    <script>
+        // Check if key already exists
+        document.addEventListener('DOMContentLoaded', function() {
+            const existingKey = sessionStorage.getItem('secretKey');
+            if (existingKey) {
+                document.getElementById('loginStatus').style.display = 'block';
+                document.getElementById('secretKey').value = existingKey;
+            }
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const secretKey = document.getElementById('secretKey').value;
+            sessionStorage.setItem('secretKey', secretKey);
+            document.getElementById('loginStatus').style.display = 'block';
+            document.getElementById('keyPreview').textContent = secretKey.substring(0, 4) + '****';
+        });
+
+        document.getElementById('recoveryForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const sk = document.getElementById('currentSk').value || '';
+            const rk = document.getElementById('recoveryKey').value;
+
+            const errorDiv = document.getElementById('recoveryError');
+            const resultDiv = document.getElementById('recoveryResult');
+            const errorMessage = document.getElementById('recoveryErrorMessage');
+
+            errorDiv.style.display = 'none';
+            resultDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/auth/recovery', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ sk: sk, rk: rk })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('newSecretKey').value = data.sk;
+                    resultDiv.style.display = 'block';
+                } else {
+                    errorMessage.textContent = data.detail || 'Recovery failed';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Network error: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        function copyNewKey() {
+            const input = document.getElementById('newSecretKey');
+            input.select();
+            document.execCommand('copy');
+            alert('Copied to clipboard!');
+        }
+
+        function useNewKey() {
+            const newKey = document.getElementById('newSecretKey').value;
+            sessionStorage.setItem('secretKey', newKey);
+            alert('New key stored in session!');
+            window.location.href = 'profile.html';
+        }
+    </script>
+</body>
+</html>

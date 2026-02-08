@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenX - Profile</title>
+</head>
+<body>
+    <header>
+        <h1>OpenX</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="register.html">Register</a>
+            <a href="login.html">Login</a>
+            <a href="profile.html">Profile</a>
+            <a href="posts.html">Posts</a>
+            <a href="media.html">Media</a>
+        </nav>
+    </header>
+
+    <main>
+        <section id="authRequired" style="display: none;">
+            <h2>Authentication Required</h2>
+            <p>You need to be logged in to view your profile.</p>
+            <a href="login.html">Go to Login</a>
+        </section>
+
+        <section id="profileContent">
+            <h2>Your Profile</h2>
+
+            <div>
+                <h3>Session Info</h3>
+                <p><strong>Secret Key:</strong> <span id="keyDisplay">****</span></p>
+                <button type="button" onclick="clearSession()">Clear Session</button>
+            </div>
+
+            <hr>
+
+            <div>
+                <h3>View User Posts</h3>
+                <form id="viewUserPostsForm">
+                    <div>
+                        <label for="viewUsername">Username:</label>
+                        <br>
+                        <input type="text" id="viewUsername" name="viewUsername" required>
+                    </div>
+                    <br>
+                    <div>
+                        <label for="postTypeFilter">Filter by Type:</label>
+                        <br>
+                        <select id="postTypeFilter" name="postTypeFilter">
+                            <option value="">All Types</option>
+                            <option value="text">Text</option>
+                            <option value="image">Image</option>
+                            <option value="video">Video</option>
+                        </select>
+                    </div>
+                    <br>
+                    <div>
+                        <label for="includeBranch">Include Branch Posts:</label>
+                        <input type="checkbox" id="includeBranch" name="includeBranch">
+                    </div>
+                    <br>
+                    <button type="submit">View Posts</button>
+                </form>
+
+                <div id="userPostsResult"></div>
+            </div>
+
+            <hr>
+
+            <div>
+                <h3>View Single Post</h3>
+                <form id="viewPostForm">
+                    <div>
+                        <label for="postId">Post ID:</label>
+                        <br>
+                        <input type="text" id="postId" name="postId" required>
+                    </div>
+                    <br>
+                    <button type="submit">View Post</button>
+                </form>
+
+                <div id="postResult"></div>
+            </div>
+        </section>
+
+        <section>
+            <h3>API Details</h3>
+            <h4>Get User Posts</h4>
+            <p><strong>Endpoint:</strong> GET /api/user/{username}/posts/</p>
+            <p><strong>Query Parameters:</strong></p>
+            <ul>
+                <li>post_type - Filter by type (text, image, video)</li>
+                <li>include_branch_posts - Include posts to branches (default: false)</li>
+                <li>skip - Pagination offset (default: 0)</li>
+                <li>limit - Max results (default: 100, max: 100)</li>
+            </ul>
+
+            <h4>Get Single Post</h4>
+            <p><strong>Endpoint:</strong> GET /api/user/posts/{post_id}/</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 OpenX</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const secretKey = sessionStorage.getItem('secretKey');
+            if (!secretKey) {
+                document.getElementById('authRequired').style.display = 'block';
+                document.getElementById('profileContent').style.display = 'none';
+            } else {
+                document.getElementById('keyDisplay').textContent = secretKey.substring(0, 8) + '****';
+            }
+        });
+
+        function clearSession() {
+            sessionStorage.removeItem('secretKey');
+            sessionStorage.removeItem('recoveryKey');
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('viewUserPostsForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('viewUsername').value;
+            const postType = document.getElementById('postTypeFilter').value;
+            const includeBranch = document.getElementById('includeBranch').checked;
+
+            let url = `/api/user/${username}/posts/?`;
+            if (postType) url += `post_type=${postType}&`;
+            if (includeBranch) url += `include_branch_posts=true&`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                const resultDiv = document.getElementById('userPostsResult');
+
+                if (response.ok) {
+                    let html = `<h4>Posts by ${username}</h4>`;
+                    if (data.length === 0) {
+                        html += '<p>No posts found.</p>';
+                    } else {
+                        html += '<ul>';
+                        data.forEach(post => {
+                            html += `<li>
+                                <strong>ID:</strong> ${post.id}<br>
+                                <strong>Type:</strong> ${post.type}<br>
+                                <strong>Content:</strong> ${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}<br>
+                                <strong>Created:</strong> ${post.created_at}
+                            </li>`;
+                        });
+                        html += '</ul>';
+                    }
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${data.detail || 'Failed to fetch posts'}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('userPostsResult').innerHTML = `<p style="color: red;">Network error: ${error.message}</p>`;
+            }
+        });
+
+        document.getElementById('viewPostForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const postId = document.getElementById('postId').value;
+
+            try {
+                const response = await fetch(`/api/user/posts/${postId}/`);
+                const data = await response.json();
+
+                const resultDiv = document.getElementById('postResult');
+
+                if (response.ok) {
+                    let html = `<h4>Post Details</h4>
+                        <p><strong>ID:</strong> ${data.id}</p>
+                        <p><strong>Type:</strong> ${data.type}</p>
+                        <p><strong>Content:</strong> ${data.content}</p>
+                        <p><strong>Author:</strong> ${data.author_id}</p>
+                        <p><strong>Created:</strong> ${data.created_at}</p>`;
+
+                    if (data.type === 'image') {
+                        html += `<p><strong>Image URL:</strong> <a href="${data.image_url}" target="_blank">${data.image_url}</a></p>`;
+                        if (data.alt_text) html += `<p><strong>Alt Text:</strong> ${data.alt_text}</p>`;
+                    } else if (data.type === 'video') {
+                        html += `<p><strong>Video URL:</strong> <a href="${data.video_url}" target="_blank">${data.video_url}</a></p>`;
+                        if (data.duration_seconds) html += `<p><strong>Duration:</strong> ${data.duration_seconds}s</p>`;
+                    }
+
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${data.detail || 'Post not found'}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('postResult').innerHTML = `<p style="color: red;">Network error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

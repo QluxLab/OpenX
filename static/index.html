@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenX - Home</title>
+</head>
+<body>
+    <header>
+        <h1>OpenX</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="register.html">Register</a>
+            <a href="login.html">Login</a>
+            <a href="profile.html">Profile</a>
+            <a href="posts.html">Posts</a>
+            <a href="media.html">Media</a>
+        </nav>
+    </header>
+
+    <main>
+        <section>
+            <h2>Welcome to OpenX</h2>
+            <p>A platform for sharing posts and media.</p>
+        </section>
+
+        <section>
+            <h2>Quick Links</h2>
+            <ul>
+                <li><a href="register.html">Create an Account</a></li>
+                <li><a href="login.html">Access Your Account</a></li>
+                <li><a href="posts.html">View Posts</a></li>
+                <li><a href="media.html">Media Gallery</a></li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>API Endpoints</h2>
+            <h3>Authentication</h3>
+            <ul>
+                <li>POST /api/auth/new - Register new user</li>
+                <li>POST /api/auth/recovery - Recover secret key</li>
+            </ul>
+            <h3>User Posts</h3>
+            <ul>
+                <li>POST /api/user/posts/ - Create post</li>
+                <li>GET /api/user/{username}/posts/ - Get user posts</li>
+                <li>GET /api/user/posts/{post_id}/ - Get single post</li>
+                <li>PATCH /api/user/posts/{post_id}/ - Update post</li>
+                <li>DELETE /api/user/posts/{post_id}/ - Delete post</li>
+            </ul>
+            <h3>Media</h3>
+            <ul>
+                <li>POST /api/media/upload - Upload media</li>
+                <li>GET /api/media/list - List user media</li>
+                <li>GET /api/media/{media_id} - Get media info</li>
+                <li>DELETE /api/media/{media_id} - Delete media</li>
+            </ul>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 OpenX</p>
+    </footer>
+</body>
+</html>
