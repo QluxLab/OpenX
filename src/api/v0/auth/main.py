@@ -5,12 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.security import new_sk, new_rk, hash_key, verify_key
-from core.db.tables.recoverykey import RecoveryKey
-from core.db.tables.secretkey import SecretKey
+from src.core.security import new_sk, new_rk, hash_key, verify_key
+from src.core.db.tables.recoverykey import RecoveryKey
+from src.core.db.tables.secretkey import SecretKey
 from src.core.db.session import get_db
-from src.api.v0.auth.models import NewTokenRequest, NewTokenResponse
-from api.v0.auth.models import RecoveryTokenRequest
+from src.api.v0.auth.models import NewTokenRequest, NewTokenResponse, RecoveryTokenRequest
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)

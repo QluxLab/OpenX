@@ -11,10 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFi
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.db.tables.media import Media
-from core.db.tables.secretkey import SecretKey
+from src.core.db.tables.media import Media
+from src.core.db.tables.secretkey import SecretKey
 from src.core.db.session import get_db, get_current_user
-from api.v0.media.models import (
+from src.api.v0.media.models import (
     MediaUploadResponse,
     MediaListResponse,
     MediaDeleteResponse,

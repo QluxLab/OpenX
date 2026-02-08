@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenX - Settings</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <a href="index.html" class="header-logo">OpenX</a>
+        <nav class="header-nav">
+            <a href="index.html">Home</a>
+        </nav>
+        <div class="header-user" id="userMenu">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div class="user-dropdown" id="userDropdown">
+                <div class="user-dropdown-item" onclick="goToProfile()">Profile</div>
+                <div class="user-dropdown-item" onclick="goToSettings()">Settings</div>
+                <div class="user-dropdown-divider"></div>
+                <div class="user-dropdown-item" onclick="logout()">Logout</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <main class="content-feed">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Account</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-input" id="usernameDisplay" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Secret Key</label>
+                        <div class="key-display" id="secretKeyDisplay"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Recovery</h2>
+                </div>
+                <div class="card-body">
+                    <p style="color: #808080; margin-bottom: 1rem;">Generate a new secret key if your current one was compromised.</p>
+
+                    <form id="recoveryForm">
+                        <div class="form-group">
+                            <label class="form-label">Recovery Key</label>
+                            <input type="password" class="form-input" id="recoveryKeyInput" required placeholder="Enter your recovery key">
+                        </div>
+                        <button type="submit" class="btn btn-secondary">Generate New Secret Key</button>
+                    </form>
+
+                    <div id="recoveryResult" style="display: none; margin-top: 1rem;">
+                        <div class="success">New secret key generated!</div>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label">New Secret Key</label>
+                            <div class="key-display" id="newSecretKey"></div>
+                        </div>
+                        <button class="btn btn-primary" onclick="copyNewKey()" style="margin-top: 0.5rem;">Copy Key</button>
+                    </div>
+
+                    <div id="recoveryError" class="error" style="display: none; margin-top: 1rem;">
+                        <p id="recoveryErrorMessage"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Session</h2>
+                </div>
+                <div class="card-body">
+                    <p style="color: #808080; margin-bottom: 1rem;">Clear your session data from this browser.</p>
+                    <button class="btn btn-danger" onclick="logout()">Logout</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let newSecretKeyValue = '';
+
+        const avatarColors = [
+            '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
+            '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
+            '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'
+        ];
+
+        function getAvatarColor(username) {
+            let hash = 0;
+            for (let i = 0; i < username.length; i++) {
+                hash = username.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return avatarColors[Math.abs(hash) % avatarColors.length];
+        }
+
+        function getAvatarLetter(username) {
+            return username.charAt(0).toUpperCase();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const secretKey = sessionStorage.getItem('secretKey');
+            const username = sessionStorage.getItem('username');
+
+            if (!secretKey || !username) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            currentUser = { username, secretKey };
+
+            document.getElementById('userAvatar').textContent = getAvatarLetter(username);
+            document.getElementById('userAvatar').style.backgroundColor = getAvatarColor(username);
+            document.getElementById('usernameDisplay').value = username;
+            document.getElementById('secretKeyDisplay').textContent = secretKey.substring(0, 12) + '...' + secretKey.substring(secretKey.length - 8);
+
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.header-user')) {
+                    document.getElementById('userDropdown').classList.remove('show');
+                }
+            });
+        });
+
+        document.getElementById('userAvatar').addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('userDropdown').classList.toggle('show');
+        });
+
+        function goToProfile() {
+            window.location.href = 'user.html?u=' + currentUser.username;
+        }
+
+        function goToSettings() {
+            // Already here
+        }
+
+        function logout() {
+            sessionStorage.removeItem('secretKey');
+            sessionStorage.removeItem('username');
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('recoveryForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const rk = document.getElementById('recoveryKeyInput').value;
+
+            const errorDiv = document.getElementById('recoveryError');
+            const resultDiv = document.getElementById('recoveryResult');
+            const errorMessage = document.getElementById('recoveryErrorMessage');
+
+            errorDiv.style.display = 'none';
+            resultDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/auth/recovery', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sk: currentUser.secretKey, rk: rk })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    newSecretKeyValue = data.sk;
+                    currentUser.secretKey = data.sk;
+                    sessionStorage.setItem('secretKey', data.sk);
+                    document.getElementById('newSecretKey').textContent = data.sk;
+                    document.getElementById('secretKeyDisplay').textContent = data.sk.substring(0, 12) + '...' + data.sk.substring(data.sk.length - 8);
+                    resultDiv.style.display = 'block';
+                    document.getElementById('recoveryForm').reset();
+                } else {
+                    errorMessage.textContent = data.detail || 'Recovery failed';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Network error: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        function copyNewKey() {
+            navigator.clipboard.writeText(newSecretKeyValue);
+            alert('New secret key copied!');
+        }
+    </script>
+</body>
+</html>

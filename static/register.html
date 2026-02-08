@@ -4,84 +4,64 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenX - Register</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <header>
-        <h1>OpenX</h1>
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="register.html">Register</a>
-            <a href="login.html">Login</a>
-            <a href="profile.html">Profile</a>
-            <a href="posts.html">Posts</a>
-            <a href="media.html">Media</a>
-        </nav>
+    <header class="header">
+        <a href="index.html" class="header-logo">OpenX</a>
     </header>
 
-    <main>
-        <section>
-            <h2>Register New Account</h2>
-            <p>Create a new account to start posting.</p>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1 class="auth-title">Create Account</h1>
+            <p class="auth-subtitle">Choose a username to get started</p>
 
             <form id="registerForm">
-                <div>
-                    <label for="username">Username:</label>
-                    <br>
-                    <input type="text" id="username" name="username" required minlength="3" maxlength="256">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-input" id="username" required minlength="3" maxlength="256" placeholder="Choose a username">
                 </div>
-                <br>
-                <button type="submit">Register</button>
+                <button type="submit" class="btn btn-primary btn-block">Create Account</button>
             </form>
 
-            <div id="result" style="display: none;">
-                <h3>Registration Successful!</h3>
-                <p><strong>Important:</strong> Save these keys securely. They will not be shown again.</p>
-                <div>
-                    <label>Secret Key (SK):</label>
-                    <br>
-                    <input type="text" id="secretKey" readonly>
-                    <button type="button" onclick="copyToClipboard('secretKey')">Copy</button>
+            <div id="result" style="display: none; margin-top: 1.5rem;">
+                <div class="success" style="margin-bottom: 1rem;">
+                    <strong>Account Created!</strong><br>
+                    Save these keys securely. They won't be shown again.
                 </div>
-                <br>
-                <div>
-                    <label>Recovery Key (RK):</label>
-                    <br>
-                    <input type="text" id="recoveryKey" readonly>
-                    <button type="button" onclick="copyToClipboard('recoveryKey')">Copy</button>
+
+                <div class="form-group">
+                    <label class="form-label">Secret Key</label>
+                    <div class="key-display" id="secretKey"></div>
                 </div>
-                <br>
-                <button type="button" onclick="saveKeys()">Save Keys to Session</button>
+
+                <div class="form-group">
+                    <label class="form-label">Recovery Key</label>
+                    <div class="key-display" id="recoveryKey"></div>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <button class="btn btn-secondary btn-sm" onclick="copySecretKey()">Copy Secret Key</button>
+                    <button class="btn btn-secondary btn-sm" onclick="copyRecoveryKey()" style="margin-left: 0.5rem;">Copy Recovery Key</button>
+                </div>
+
+                <button class="btn btn-primary btn-block" onclick="saveKeys()" style="margin-top: 1rem;">Continue to Home</button>
             </div>
 
-            <div id="error" style="display: none; color: red;">
+            <div id="error" class="error" style="display: none;">
                 <p id="errorMessage"></p>
             </div>
-        </section>
 
-        <section>
-            <h3>API Details</h3>
-            <p><strong>Endpoint:</strong> POST /api/auth/new</p>
-            <p><strong>Request Body:</strong></p>
-            <pre>
-{
-    "username": "your_username"
-}
-            </pre>
-            <p><strong>Response:</strong></p>
-            <pre>
-{
-    "sk": "secret_key",
-    "rk": "recovery_key"
-}
-            </pre>
-        </section>
-    </main>
-
-    <footer>
-        <p>&copy; 2024 OpenX</p>
-    </footer>
+            <div class="auth-footer">
+                Already have an account? <a href="login.html">Login</a>
+            </div>
+        </div>
+    </div>
 
     <script>
+        let secretKeyValue = '';
+        let recoveryKeyValue = '';
+
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -96,18 +76,19 @@
             try {
                 const response = await fetch('/api/auth/new', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    document.getElementById('secretKey').value = data.sk;
-                    document.getElementById('recoveryKey').value = data.rk;
+                    secretKeyValue = data.sk;
+                    recoveryKeyValue = data.rk;
+                    document.getElementById('secretKey').textContent = data.sk;
+                    document.getElementById('recoveryKey').textContent = data.rk;
                     resultDiv.style.display = 'block';
+                    document.getElementById('registerForm').style.display = 'none';
                 } else {
                     errorMessage.textContent = data.detail || 'Registration failed';
                     errorDiv.style.display = 'block';
@@ -118,19 +99,21 @@
             }
         });
 
-        function copyToClipboard(elementId) {
-            const input = document.getElementById(elementId);
-            input.select();
-            document.execCommand('copy');
-            alert('Copied to clipboard!');
+        function copySecretKey() {
+            navigator.clipboard.writeText(secretKeyValue);
+            alert('Secret key copied!');
+        }
+
+        function copyRecoveryKey() {
+            navigator.clipboard.writeText(recoveryKeyValue);
+            alert('Recovery key copied!');
         }
 
         function saveKeys() {
-            const sk = document.getElementById('secretKey').value;
-            const rk = document.getElementById('recoveryKey').value;
-            sessionStorage.setItem('secretKey', sk);
-            sessionStorage.setItem('recoveryKey', rk);
-            alert('Keys saved to session storage!');
+            sessionStorage.setItem('secretKey', secretKeyValue);
+            sessionStorage.setItem('recoveryKey', recoveryKeyValue);
+            sessionStorage.setItem('username', document.getElementById('username').value);
+            window.location.href = 'index.html';
         }
     </script>
 </body>

@@ -167,3 +167,38 @@ def delete_post(
         )
     session.delete(post)
     session.commit()
+
+
+@router.get("/feed/", response_model=list[PostResponseUnion])
+def get_global_feed(
+    session: Session = Depends(get_db),
+    post_type: str | None = None,
+    skip: int = 0,
+    limit: int = 100,
+):
+    """
+    Get a global feed of all posts from all users.
+    Only returns profile posts (not branch posts).
+    """
+    model_class = get_post_model(post_type) if post_type else UserPost
+
+    if post_type and not model_class:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown post type: {post_type}",
+        )
+
+    query = select(model_class).where(model_class.branch.is_(None))
+
+    posts = (
+        session.execute(
+            query
+            .order_by(UserPost.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+    return [get_response_schema(post) for post in posts]
