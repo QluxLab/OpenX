@@ -47,9 +47,9 @@
 
             <form id="recoveryForm">
                 <div>
-                    <label for="currentSk">Current Secret Key (if known, optional):</label>
+                    <label for="currentSk">Current Secret Key:</label>
                     <br>
-                    <input type="password" id="currentSk" name="currentSk">
+                    <input type="password" id="currentSk" name="currentSk" required>
                 </div>
                 <br>
                 <div>
@@ -123,7 +123,7 @@
         document.getElementById('recoveryForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            const sk = document.getElementById('currentSk').value || '';
+            const sk = document.getElementById('currentSk').value;
             const rk = document.getElementById('recoveryKey').value;
 
             const errorDiv = document.getElementById('recoveryError');
