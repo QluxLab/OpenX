@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Login - OpenX{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-card">
+        <h2 class="form-title">Login</h2>
+
+        <div class="form-group">
+            <label class="form-label">Secret Key</label>
+            <input type="text" id="secretKey" class="form-input" placeholder="sk-...">
+        </div>
+
+        <button type="button" class="btn btn-primary btn-full" onclick="doLogin()">Login</button>
+
+        <div id="message" class="form-error" style="display: none;"></div>
+
+        <p class="mt-16 text-center">
+            Don't have an account? <a href="/register">Register</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doLogin() {
+    const sk = document.getElementById('secretKey').value.trim();
+    const messageEl = document.getElementById('message');
+
+    if (!sk) {
+        showError(messageEl, 'Please enter your secret key');
+        return;
+    }
+
+    hideMessage(messageEl);
+
+    try {
+        const response = await verifyLogin(sk);
+        setCookie('secret_key', sk);
+        showSuccess(messageEl, `Welcome, ${response.username}! Redirecting...`);
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+    } catch (error) {
+        showError(messageEl, error.message || 'Invalid secret key');
+    }
+}
+</script>
+{% endblock %}

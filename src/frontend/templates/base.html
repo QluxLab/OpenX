@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenX{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <a href="/" class="logo">OpenX</a>
+            <nav class="nav">
+                <a href="/" class="nav-link">Feed</a>
+                {% if user %}
+                <a href="/submit" class="nav-link">Submit</a>
+                <a href="/u/{{ user.username }}" class="nav-link">{{ user.username }}</a>
+                <a href="#" class="nav-link" onclick="logout()">Logout</a>
+                {% else %}
+                <a href="/login" class="nav-link">Login</a>
+                <a href="/register" class="nav-link">Register</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <div class="content">
+                {% block content %}{% endblock %}
+            </div>
+            <aside class="sidebar">
+                {% block sidebar %}
+                <div class="sidebar-section">
+                    <h3>Branches</h3>
+                    <ul class="branch-list">
+                        {% for branch in branches %}
+                        <li><a href="/b/{{ branch.name }}">b/{{ branch.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                    {% if user %}
+                    <a href="/create-branch" class="btn btn-small">Create Branch</a>
+                    {% endif %}
+                </div>
+                {% endblock %}
+            </aside>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>OpenX - Open Source Social Platform</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

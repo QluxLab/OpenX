@@ -1,6 +1,6 @@
-from typing import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Integer, DateTime, func
-from core.db.engine import Base
+from src.core.db.tables.base import Base
 
 
 class Media(Base):

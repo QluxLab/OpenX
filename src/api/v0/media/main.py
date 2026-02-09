@@ -1,6 +1,6 @@
 import os
 import uuid
-import shutil
+import filetype
 from datetime import datetime
 from pathlib import Path
 
@@ -11,10 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFi
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.db.tables.media import Media
-from core.db.tables.secretkey import SecretKey
+from src.core.db.tables.media import Media
+from src.core.db.tables.secretkey import SecretKey
 from src.core.db.session import get_db, get_current_user
-from api.v0.media.models import (
+from src.core.logger import get_logger
+from src.api.v0.media.models import (
     MediaUploadResponse,
     MediaListResponse,
     MediaDeleteResponse,
@@ -25,6 +26,9 @@ from api.v0.media.models import (
     MAX_VIDEO_SIZE,
 )
 
+# Initialize logger
+logger = get_logger(__name__)
+
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
@@ -33,6 +37,9 @@ router = APIRouter(prefix="/media")
 # Configuration - can be overridden via environment variables
 CDN_BASE_URL = os.getenv("OPENX_CDN_URL", "http://localhost:8000/cdn")
 CDN_STORAGE_PATH = os.getenv("OPENX_CDN_PATH", "./.data/uploads")
+
+# Chunk size for streaming uploads (1MB)
+CHUNK_SIZE = 1024 * 1024
 
 
 def get_media_type(content_type: str) -> str | None:
@@ -61,9 +68,23 @@ def ensure_upload_dir(storage_path: str) -> Path:
     return upload_dir
 
 
+def validate_file_by_magic_bytes(file_path: Path) -> str | None:
+    """
+    Validate file type using magic bytes.
+    Returns the detected MIME type or None if invalid.
+    """
+    try:
+        kind = filetype.guess(file_path)
+        if kind is None:
+            return None
+        return kind.mime
+    except Exception:
+        return None
+
+
 @router.post("/upload", response_model=MediaUploadResponse)
 @limiter.limit("20/minute")
-def upload_media(
+async def upload_media(
     request: Request,
     file: UploadFile = File(...),
     current_user: SecretKey = Depends(get_current_user),
@@ -75,8 +96,10 @@ def upload_media(
     Accepts images (JPEG, PNG, GIF, WebP) up to 10MB and videos (MP4, WebM, OGG) up to 100MB.
     Rate limited to 20 uploads per minute per IP.
     Requires authentication via X-Secret-Key header.
+
+    Files are streamed to disk to avoid memory issues and validated using magic bytes.
     """
-    # Validate content type
+    # Validate content type header (preliminary check)
     if not file.content_type or file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -85,23 +108,6 @@ def upload_media(
 
     media_type = get_media_type(file.content_type)
     max_size = get_max_size(media_type)
-
-    # Read file content to check size
-    content = file.file.read()
-    file_size = len(content)
-
-    if file_size > max_size:
-        max_size_mb = max_size // (1024 * 1024)
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large. Maximum size for {media_type}s is {max_size_mb}MB",
-        )
-
-    if file_size == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty file not allowed",
-        )
 
     # Generate unique ID and storage path
     media_id = generate_media_id()
@@ -115,9 +121,54 @@ def upload_media(
     upload_dir = ensure_upload_dir(CDN_STORAGE_PATH)
     storage_path = upload_dir / stored_filename
 
-    # Write file to disk
-    with open(storage_path, "wb") as f:
-        f.write(content)
+    # Stream file to disk with size checking
+    total_size = 0
+    try:
+        with open(storage_path, "wb") as f:
+            while chunk := await file.read(CHUNK_SIZE):
+                total_size += len(chunk)
+
+                # Check size limit during streaming
+                if total_size > max_size:
+                    # Clean up partial file
+                    storage_path.unlink(missing_ok=True)
+                    max_size_mb = max_size // (1024 * 1024)
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File too large. Maximum size for {media_type}s is {max_size_mb}MB",
+                    )
+
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up on any error
+        storage_path.unlink(missing_ok=True)
+        logger.error(f"Error streaming file upload: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload file",
+        )
+
+    # Check if file is empty
+    if total_size == 0:
+        storage_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty file not allowed",
+        )
+
+    # Validate file type using magic bytes (not just Content-Type header)
+    detected_mime = validate_file_by_magic_bytes(storage_path)
+    if not detected_mime or detected_mime not in ALLOWED_CONTENT_TYPES:
+        storage_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="File content does not match allowed types or could not be validated",
+        )
+
+    # Update media type based on actual file content
+    actual_media_type = get_media_type(detected_mime)
 
     # Build CDN URL
     cdn_url = f"{CDN_BASE_URL}/{stored_filename}"
@@ -127,10 +178,10 @@ def upload_media(
         id=media_id,
         username=current_user.username,
         url=cdn_url,
-        media_type=media_type,
+        media_type=actual_media_type,
         filename=original_filename,
-        size_bytes=file_size,
-        content_type=file.content_type,
+        size_bytes=total_size,
+        content_type=detected_mime,
         storage_path=str(storage_path),
     )
 
@@ -138,13 +189,15 @@ def upload_media(
     session.commit()
     session.refresh(media_record)
 
+    logger.info(f"Media uploaded: {media_id} by user {current_user.username}")
+
     return MediaUploadResponse(
         id=media_id,
         url=cdn_url,
-        media_type=media_type,
+        media_type=actual_media_type,
         filename=original_filename,
-        size_bytes=file_size,
-        content_type=file.content_type,
+        size_bytes=total_size,
+        content_type=detected_mime,
         created_at=media_record.created_at,
     )
 
@@ -206,6 +259,8 @@ def delete_media(
     # Delete database record
     session.delete(media_record)
     session.commit()
+
+    logger.info(f"Media deleted: {media_id} by user {current_user.username}")
 
     return MediaDeleteResponse(id=media_id)
 
