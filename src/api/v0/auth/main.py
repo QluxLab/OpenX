@@ -5,12 +5,22 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from core.security import new_sk, new_rk, hash_key, verify_key
-from core.db.tables.recoverykey import RecoveryKey
-from core.db.tables.secretkey import SecretKey
+from src.core.security import new_sk, new_rk, hash_key, verify_key, new_branch_master_key, hash_master_key
+from src.core.db.tables.recoverykey import RecoveryKey
+from src.core.db.tables.secretkey import SecretKey
+from src.core.db.tables.branch import Branch
 from src.core.db.session import get_db
-from src.api.v0.auth.models import NewTokenRequest, NewTokenResponse
-from api.v0.auth.models import RecoveryTokenRequest
+from src.core.logger import get_logger
+from src.api.v0.auth.models import (
+    NewTokenRequest,
+    NewTokenResponse,
+    RecoveryTokenRequest,
+    VerifyLoginRequest,
+    VerifyLoginResponse,
+)
+
+# Initialize logger
+logger = get_logger(__name__)
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -35,18 +45,20 @@ def new_user(
 ):
     """
     Create a new user with secure credential storage.
-    
+
     Rate limited to 5 requests per minute per IP.
     Credentials are hashed before storage - only the user receives plaintext keys.
     """
     username = new_token_request.username
-    
+    logger.info(f"New user registration attempt: {username}")
+
     # Check if username already exists
     existing_sk = session.execute(
         select(SecretKey).where(SecretKey.username == username)
     ).scalar()
-    
+
     if existing_sk:
+        logger.warning(f"Registration failed - username already exists: {username}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists!",
@@ -76,12 +88,27 @@ def new_user(
         username=username
     )
 
+    # Create user's personal branch (u/username)
+    branch_name = f"u_{username}"
+    master_key = new_branch_master_key()
+    hashed_master_key = hash_master_key(master_key)
+
+    user_branch = Branch(
+        name=branch_name,
+        description=f"{username}'s personal profile",
+        master_key=hashed_master_key,
+        created_by=username,
+    )
+
     try:
         session.add(new_secret_key_model)
         session.add(new_recovery_key_model)
+        session.add(user_branch)
         session.commit()
+        logger.info(f"User created successfully: {username}")
     except IntegrityError:
         session.rollback()
+        logger.error(f"Database integrity error during user creation: {username}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists!",
@@ -136,6 +163,7 @@ def refresh_token(
     
     # Single error response for all validation failures (prevents information leakage)
     if not (sk_valid and rk_valid and username_match):
+        logger.warning(f"Recovery failed - invalid credentials for sk_id: {sk_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -147,19 +175,14 @@ def refresh_token(
     new_sk_hash = hash_key(new_secret_key)
     
     try:
-        # Delete old secret key
-        session.delete(sk_object)
-        
-        # Create new secret key with hashed value
-        new_secret_key_model = SecretKey(
-            sk_id=new_sk_id,
-            sk_hash=new_sk_hash,
-            username=sk_object.username
-        )
-        session.add(new_secret_key_model)
+        # Update the existing secret key instead of delete + insert (fixes race condition)
+        sk_object.sk_id = new_sk_id
+        sk_object.sk_hash = new_sk_hash
         session.commit()
+        logger.info(f"Secret key refreshed successfully for user: {sk_object.username}")
     except IntegrityError:
         session.rollback()
+        logger.error(f"Database error during key refresh for user: {sk_object.username}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database error occurred",
@@ -167,3 +190,38 @@ def refresh_token(
 
     # Return new plaintext secret key (only time it's available)
     return NewTokenResponse(sk=new_secret_key, rk=recovery_key)
+
+
+@router.post("/verify", response_model=VerifyLoginResponse)
+@limiter.limit("10/minute")
+def verify_login(
+    request: Request,
+    verify_request: VerifyLoginRequest,
+    session: Session = Depends(get_db),
+):
+    """
+    Verify a secret key and return the associated username.
+
+    Rate limited to 10 requests per minute per IP.
+    Used for login verification.
+    """
+    sk_id = extract_key_id(verify_request.sk)
+
+    sk_object = session.execute(
+        select(SecretKey).where(SecretKey.sk_id == sk_id)
+    ).scalar()
+
+    if not sk_object:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+
+    if not verify_key(verify_request.sk, sk_object.sk_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+
+    logger.info(f"Login verified for user: {sk_object.username}")
+    return VerifyLoginResponse(username=sk_object.username, valid=True)

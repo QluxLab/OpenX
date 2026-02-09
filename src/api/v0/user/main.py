@@ -4,10 +4,12 @@ from src.core.db.tables.branch import Branch
 from sqlalchemy.orm import Session
 from src.core.db.session import get_current_user, get_db
 from src.core.db.tables.secretkey import SecretKey
+from src.core.logger import get_logger
 from src.api.v0.user.models import PostCreateUnion, get_post_model, get_response_schema, TextPostUpdate, ImagePostUpdate, VideoPostUpdate, PostResponseUnion
 from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(prefix="/user")
+logger = get_logger(__name__)
 
 
 def get_post_or_404(session, post_id):
@@ -26,11 +28,11 @@ def validate_branch_exists(session: Session, branch_name: str) -> None:
     branch = session.execute(
         select(Branch).where(Branch.name == branch_name)
     ).scalar()
-    
+
     if not branch:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Branch '{branch_name}' does not exist. Create it first at POST /branch/create",
+            detail="Branch not found",
         )
 
 
@@ -108,14 +110,17 @@ def get_user_posts(
 ):
     """
     Get posts from a user's profile.
-    
+
     Args:
         username: The username to get posts for
         post_type: Filter by post type (text, image, video)
         include_branch_posts: If True, includes posts made to branches. If False (default), only profile posts
         skip: Number of posts to skip (pagination)
-        limit: Maximum number of posts to return
+        limit: Maximum number of posts to return (max 500)
     """
+    # Cap limit to prevent abuse
+    limit = min(max(1, limit), 500)
+
     model_class = get_post_model(post_type) if post_type else UserPost
 
     if post_type and not model_class:
@@ -125,11 +130,11 @@ def get_user_posts(
         )
 
     query = select(model_class).where(model_class.username == username)
-    
+
     if not include_branch_posts:
         # Only get profile posts (where branch is None)
         query = query.where(model_class.branch.is_(None))
-    
+
     posts = (
         session.execute(
             query

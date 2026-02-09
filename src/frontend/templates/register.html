@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Register - OpenX{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-card">
+        <h2 class="form-title">Create Account</h2>
+
+        <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" id="username" class="form-input" placeholder="Choose a username (3-256 chars)">
+        </div>
+
+        <button type="button" class="btn btn-primary btn-full" onclick="doRegister()">Create Account</button>
+
+        <div id="message" class="form-error" style="display: none;"></div>
+
+        <div id="keyDisplay" style="display: none;" class="form-info">
+            <p><strong>Save these keys securely!</strong> You won't see them again.</p>
+            <p><strong>Secret Key (for login):</strong></p>
+            <code id="secretKey"></code>
+            <p class="mt-16"><strong>Recovery Key (to reset secret key):</strong></p>
+            <code id="recoveryKey"></code>
+            <p class="mt-16"><a href="/" class="btn btn-primary btn-full">I've saved my keys - Continue</a></p>
+        </div>
+
+        <p class="mt-16 text-center">
+            Already have an account? <a href="/login">Login</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doRegister() {
+    const username = document.getElementById('username').value.trim();
+    const messageEl = document.getElementById('message');
+    const keyDisplay = document.getElementById('keyDisplay');
+
+    if (!username || username.length < 3) {
+        showError(messageEl, 'Username must be at least 3 characters');
+        return;
+    }
+
+    hideMessage(messageEl);
+
+    try {
+        const data = await register(username);
+
+        // Show the keys
+        document.getElementById('secretKey').textContent = data.sk;
+        document.getElementById('recoveryKey').textContent = data.rk;
+        keyDisplay.style.display = 'block';
+
+        // Set cookie for auto-login
+        setCookie('secret_key', data.sk);
+
+        // Hide the form
+        document.querySelector('.form-group').style.display = 'none';
+        document.querySelector('.btn-primary').style.display = 'none';
+    } catch (error) {
+        showError(messageEl, error.message);
+    }
+}
+</script>
+{% endblock %}

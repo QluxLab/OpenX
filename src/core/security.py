@@ -1,5 +1,6 @@
 import os
 import hmac
+import hashlib
 import bcrypt
 
 
@@ -23,34 +24,48 @@ def new_branch_master_key() -> str:
     return f"bmk-{newkey(32)}"
 
 
+def _prepare_key_for_bcrypt(key: str) -> bytes:
+    """
+    Prepare a key for bcrypt hashing.
+    Bcrypt has a 72 byte limit, so we hash longer keys with SHA256 first.
+    """
+    key_bytes = key.encode('utf-8')
+    if len(key_bytes) > 72:
+        # Hash with SHA256 for longer keys
+        return hashlib.sha256(key_bytes).hexdigest().encode('utf-8')
+    return key_bytes
+
+
 def hash_key(key: str) -> str:
     """
     Hash a key (secret key or recovery key) using bcrypt.
-    
+
     Args:
         key: The plain text key to hash
-        
+
     Returns:
         The bcrypt hash as a string
     """
     salt = bcrypt.gensalt(rounds=12)
-    hashed = bcrypt.hashpw(key.encode('utf-8'), salt)
+    key_bytes = _prepare_key_for_bcrypt(key)
+    hashed = bcrypt.hashpw(key_bytes, salt)
     return hashed.decode('utf-8')
 
 
 def verify_key(plain_key: str, hashed_key: str) -> bool:
     """
     Verify a key against its bcrypt hash using constant-time comparison.
-    
+
     Args:
         plain_key: The plain text key to verify
         hashed_key: The bcrypt hash to compare against
-        
+
     Returns:
         True if the key matches, False otherwise
     """
     try:
-        return bcrypt.checkpw(plain_key.encode('utf-8'), hashed_key.encode('utf-8'))
+        key_bytes = _prepare_key_for_bcrypt(plain_key)
+        return bcrypt.checkpw(key_bytes, hashed_key.encode('utf-8'))
     except (ValueError, TypeError):
         return False
 

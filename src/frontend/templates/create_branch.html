@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Create Branch - OpenX{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-card">
+        <h2 class="form-title">Create Branch</h2>
+
+        <div class="form-group">
+            <label class="form-label">Branch Name</label>
+            <input type="text" id="branchName" class="form-input" placeholder="e.g. programming (letters, numbers, _ and - only)">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Description (optional)</label>
+            <textarea id="description" class="form-textarea" placeholder="What is this branch about?"></textarea>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-full" onclick="createNewBranch()">Create Branch</button>
+
+        <div id="message" class="form-error" style="display: none;"></div>
+
+        <div id="keyDisplay" style="display: none;" class="form-info">
+            <p><strong>Branch created successfully!</strong></p>
+            <p><strong>Master Key (for moderation):</strong></p>
+            <code id="masterKey"></code>
+            <p class="mt-16"><strong>Save this key!</strong> You'll need it to moderate the branch.</p>
+            <p class="mt-16"><a id="branchLink" href="#" class="btn btn-primary btn-full">Go to Branch</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function createNewBranch() {
+    const name = document.getElementById('branchName').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const messageEl = document.getElementById('message');
+    const keyDisplay = document.getElementById('keyDisplay');
+
+    hideMessage(messageEl);
+
+    if (!name || name.length < 3) {
+        showError(messageEl, 'Branch name must be at least 3 characters');
+        return;
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        showError(messageEl, 'Branch name can only contain letters, numbers, underscores, and hyphens');
+        return;
+    }
+
+    try {
+        const data = await createBranch(name, description || null);
+
+        // Show the master key
+        document.getElementById('masterKey').textContent = data.master_key;
+        document.getElementById('branchLink').href = '/b/' + name;
+        keyDisplay.style.display = 'block';
+
+        // Hide the form
+        document.querySelectorAll('.form-group').forEach(el => el.style.display = 'none');
+        document.querySelector('.btn-primary').style.display = 'none';
+    } catch (error) {
+        showError(messageEl, error.message);
+    }
+}
+</script>
+{% endblock %}

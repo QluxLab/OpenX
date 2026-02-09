@@ -1,0 +1,14 @@
+services:
+  openx:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - openx-data:/app/.data
+    environment:
+      - OPENX_DB_URL=sqlite:///.data/openx.db
+      - OPENX_CDN_URL=http://localhost:8000/cdn
+      - OPENX_CDN_PATH=./.data/uploads
+
+volumes:
+  openx-data:

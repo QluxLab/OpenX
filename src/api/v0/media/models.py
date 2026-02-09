@@ -53,6 +53,21 @@ ALLOWED_VIDEO_TYPES = {
 
 ALLOWED_CONTENT_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES
 
+# File extensions mapped to MIME types (for magic byte validation)
+ALLOWED_EXTENSIONS = {
+    # Images
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    # Videos
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+    "ogg": "video/ogg",
+}
+
 # Max file sizes (in bytes)
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_VIDEO_SIZE = 100 * 1024 * 1024  # 100 MB
+

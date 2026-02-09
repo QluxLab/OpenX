@@ -1,4 +1,4 @@
-from core.db.tables.userpost import TextPost, ImagePost, VideoPost, UserPost
+from src.core.db.tables.userpost import TextPost, ImagePost, VideoPost, UserPost
 from datetime import datetime
 from typing import Literal
 from pydantic import Field, BaseModel
