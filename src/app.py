@@ -16,6 +16,7 @@ from src.core.db.tables.userpost import UserPost
 from src.core.db.tables.branch import Branch
 from src.core.db.tables.secretkey import SecretKey
 from src.api.router import router as api_router
+from src.api.rss import router as rss_router
 from src.core.logger import configure_app_logging, get_logger
 from src.core.middleware import (
     SecurityHeadersMiddleware,
@@ -51,6 +52,9 @@ templates = Jinja2Templates(directory=BASE_DIR / "frontend" / "templates")
 
 # Include API routes
 app.include_router(api_router)
+
+# Include RSS routes (at root level, not under /api)
+app.include_router(rss_router)
 
 
 def get_current_user_optional(request: Request, session: Session = Depends(get_db)) -> dict | None:
