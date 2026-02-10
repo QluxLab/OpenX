@@ -49,15 +49,17 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
     For GET requests: Generate and attach a CSRF token
     For POST/PUT/PATCH/DELETE requests: Validate the CSRF token
+
+    API routes are exempt since they use X-Secret-Key header authentication.
     """
 
     CSRF_HEADER = "X-CSRF-Token"
     CSRF_COOKIE = "csrf_token"
-    EXEMPT_PATHS = {
-        "/api/auth/new",
-        "/api/auth/recovery",
-    }
     SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+    def _is_api_route(self, path: str) -> bool:
+        """Check if the path is an API route (exempt from CSRF)."""
+        return path.startswith("/api/")
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Generate CSRF token for session
@@ -82,7 +84,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             return response
 
         # For unsafe methods, validate CSRF token
-        if request.url.path in self.EXEMPT_PATHS:
+        # API routes are exempt (they use X-Secret-Key header auth)
+        if self._is_api_route(request.url.path):
             return await call_next(request)
 
         # Check for CSRF token in header
