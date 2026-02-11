@@ -1,7 +1,34 @@
 from src.core.db.tables.userpost import TextPost, ImagePost, VideoPost, UserPost
 from datetime import datetime
 from typing import Literal
-from pydantic import Field, BaseModel
+from pydantic import Field, BaseModel, field_validator
+
+
+# Allowed URL schemes to prevent XSS via javascript: and data: URLs
+ALLOWED_URL_SCHEMES = {'http', 'https', ''}
+
+
+def validate_url_scheme(url: str | None, field_name: str) -> str | None:
+    """
+    Validate that a URL uses only allowed schemes (http, https, or relative).
+
+    This prevents stored XSS attacks via javascript: and data: URL schemes.
+    """
+    if url is None or url == '':
+        return url
+
+    # Extract scheme by finding the first ':' or returning empty
+    scheme = ''
+    if ':' in url:
+        scheme = url.split(':', 1)[0].lower().strip()
+
+    if scheme not in ALLOWED_URL_SCHEMES:
+        raise ValueError(
+            f"{field_name} must use http://, https://, or be a relative URL. "
+            f"'{scheme}:' scheme is not allowed."
+        )
+
+    return url
 
 
 
@@ -25,6 +52,11 @@ class ImagePostCreate(PostBase):
     height: int | None = Field(None, gt=0)
     alt_text: str | None = Field(None, max_length=256)
 
+    @field_validator('image_url')
+    @classmethod
+    def validate_image_url_scheme(cls, v: str) -> str:
+        return validate_url_scheme(v, 'image_url')
+
 
 class VideoPostCreate(PostBase):
     """Request schema for creating video posts"""
@@ -33,6 +65,16 @@ class VideoPostCreate(PostBase):
     video_url: str = Field(..., max_length=512)
     thumbnail_url: str | None = Field(None, max_length=512)
     duration_seconds: int | None = Field(None, ge=0)
+
+    @field_validator('video_url')
+    @classmethod
+    def validate_video_url_scheme(cls, v: str) -> str:
+        return validate_url_scheme(v, 'video_url')
+
+    @field_validator('thumbnail_url')
+    @classmethod
+    def validate_thumbnail_url_scheme(cls, v: str | None) -> str | None:
+        return validate_url_scheme(v, 'thumbnail_url')
 
 
 
@@ -57,6 +99,11 @@ class ImagePostUpdate(PostUpdate):
     height: int | None = Field(None, gt=0)
     alt_text: str | None = Field(None, max_length=256)
 
+    @field_validator('image_url')
+    @classmethod
+    def validate_image_url_scheme(cls, v: str | None) -> str | None:
+        return validate_url_scheme(v, 'image_url')
+
 
 class VideoPostUpdate(PostUpdate):
     """Update schema for video posts"""
@@ -64,6 +111,16 @@ class VideoPostUpdate(PostUpdate):
     video_url: str | None = Field(None, max_length=512)
     thumbnail_url: str | None = Field(None, max_length=512)
     duration_seconds: int | None = Field(None, ge=0)
+
+    @field_validator('video_url')
+    @classmethod
+    def validate_video_url_scheme(cls, v: str | None) -> str | None:
+        return validate_url_scheme(v, 'video_url')
+
+    @field_validator('thumbnail_url')
+    @classmethod
+    def validate_thumbnail_url_scheme(cls, v: str | None) -> str | None:
+        return validate_url_scheme(v, 'thumbnail_url')
 
 
 class PostResponse(BaseModel):

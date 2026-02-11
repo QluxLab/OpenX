@@ -32,9 +32,10 @@ from src.api.v0.branch.models import (
 )
 
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-limiter = Limiter(key_func=get_remote_address)
+from src.core.rate_limit import get_real_client_ip
+
+limiter = Limiter(key_func=get_real_client_ip)
 
 router = APIRouter(prefix="/branch")
 
