@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from src.core.security import new_sk, new_rk, hash_key, verify_key, new_branch_master_key, hash_master_key
+from src.core.rate_limit import get_real_client_ip
 from src.core.db.tables.recoverykey import RecoveryKey
 from src.core.db.tables.secretkey import SecretKey
 from src.core.db.tables.branch import Branch
@@ -23,7 +23,7 @@ from src.api.v0.auth.models import (
 logger = get_logger(__name__)
 
 # Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_real_client_ip)
 
 router = APIRouter(prefix="/auth")
 
@@ -196,6 +196,7 @@ def refresh_token(
 @limiter.limit("10/minute")
 def verify_login(
     request: Request,
+    response: Response,
     verify_request: VerifyLoginRequest,
     session: Session = Depends(get_db),
 ):
@@ -204,6 +205,7 @@ def verify_login(
 
     Rate limited to 10 requests per minute per IP.
     Used for login verification.
+    Sets an HttpOnly cookie for secure authentication.
     """
     sk_id = extract_key_id(verify_request.sk)
 
@@ -223,5 +225,38 @@ def verify_login(
             detail="Invalid credentials",
         )
 
+    # Set HttpOnly cookie for secure authentication
+    # HttpOnly prevents JavaScript access (XSS protection)
+    # Secure flag should be enabled in production (HTTPS only)
+    # SameSite=Strict prevents CSRF attacks
+    response.set_cookie(
+        key="secret_key",
+        value=verify_request.sk,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="strict",
+        max_age=365 * 24 * 60 * 60,  # 1 year in seconds
+        path="/",
+    )
+
     logger.info(f"Login verified for user: {sk_object.username}")
     return VerifyLoginResponse(username=sk_object.username, valid=True)
+
+
+@router.post("/logout")
+def logout(
+    request: Request,
+    response: Response,
+):
+    """
+    Logout by clearing the HttpOnly cookie.
+
+    Since the cookie is HttpOnly, JavaScript cannot delete it directly.
+    This endpoint clears the cookie server-side.
+    """
+    response.delete_cookie(
+        key="secret_key",
+        path="/",
+    )
+    logger.info("User logged out")
+    return {"message": "Logged out successfully"}

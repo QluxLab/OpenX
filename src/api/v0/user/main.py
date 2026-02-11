@@ -152,8 +152,15 @@ def get_user_posts(
 def get_post_by_id(
     post_id: int,
     session: Session = Depends(get_db),
+    current_user: SecretKey = Depends(get_current_user),
 ):
     post = get_post_or_404(session, post_id)
+
+    if post.username != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this post",
+        )
 
     return get_response_schema(post)
 

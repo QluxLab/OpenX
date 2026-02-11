@@ -9,19 +9,18 @@ function getCsrfToken() {
 
 // Helper function for API calls
 async function apiCall(endpoint, options = {}) {
-    const sk = getCookie('secret_key');
     const csrfToken = getCsrfToken();
 
     const headers = {
         'Content-Type': 'application/json',
-        ...(sk && { 'X-Secret-Key': sk }),
         ...(csrfToken && options.method && options.method !== 'GET' && { 'X-CSRF-Token': csrfToken }),
         ...options.headers
     };
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
-        headers
+        headers,
+        credentials: 'include',  // Send HttpOnly cookies automatically
     });
 
     if (!response.ok) {
@@ -94,8 +93,16 @@ async function verifyLogin(sk) {
     }
 }
 
-function logout() {
-    deleteCookie('secret_key');
+async function logout() {
+    try {
+        // Call backend to clear HttpOnly cookie (JS cannot delete HttpOnly cookies)
+        await apiCall('/auth/logout', {
+            method: 'POST'
+        });
+    } catch (error) {
+        // Even if logout fails, redirect to home
+        console.error('Logout error:', error);
+    }
     window.location.href = '/';
 }
 
@@ -140,18 +147,17 @@ async function uploadMedia(file) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const sk = getCookie('secret_key');
     const csrfToken = getCsrfToken();
 
     const headers = {
-        ...(sk && { 'X-Secret-Key': sk }),
         ...(csrfToken && { 'X-CSRF-Token': csrfToken })
     };
 
     const response = await fetch(`${API_BASE}/media/upload`, {
         method: 'POST',
         headers,
-        body: formData
+        body: formData,
+        credentials: 'include',  // Send HttpOnly cookies automatically
     });
 
     if (!response.ok) {

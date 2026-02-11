@@ -38,7 +38,7 @@ async function doLogin() {
 
     try {
         const response = await verifyLogin(sk);
-        setCookie('secret_key', sk);
+        // Cookie is now set server-side with HttpOnly flag for security
         showSuccess(messageEl, `Welcome, ${response.username}! Redirecting...`);
         setTimeout(() => {
             window.location.href = '/';

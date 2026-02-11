@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from src.core.db.tables.media import Media
+from src.core.rate_limit import get_real_client_ip
 from src.core.db.tables.secretkey import SecretKey
 from src.core.db.session import get_db, get_current_user
 from src.core.logger import get_logger
@@ -30,7 +30,7 @@ from src.api.v0.media.models import (
 logger = get_logger(__name__)
 
 # Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_real_client_ip)
 
 router = APIRouter(prefix="/media")
 
