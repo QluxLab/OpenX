@@ -54,8 +54,8 @@ async function doRegister() {
         document.getElementById('recoveryKey').textContent = data.rk;
         keyDisplay.style.display = 'block';
 
-        // Set cookie for auto-login
-        setCookie('secret_key', data.sk);
+        // Cookie is set server-side with HttpOnly flag for security
+        // No client-side cookie handling needed
 
         // Hide the form
         document.querySelector('.form-group').style.display = 'none';

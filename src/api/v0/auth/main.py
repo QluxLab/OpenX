@@ -40,6 +40,7 @@ def extract_key_id(key: str) -> str:
 @limiter.limit("5/minute")
 def new_user(
     request: Request,
+    response: Response,
     new_token_request: NewTokenRequest,
     session: Session = Depends(get_db),
 ):
@@ -48,6 +49,7 @@ def new_user(
 
     Rate limited to 5 requests per minute per IP.
     Credentials are hashed before storage - only the user receives plaintext keys.
+    Sets an HttpOnly cookie for secure authentication.
     """
     username = new_token_request.username
     logger.info(f"New user registration attempt: {username}")
@@ -63,19 +65,19 @@ def new_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists!",
         )
-    
+
     # Generate new keys
     new_secret_key = new_sk()
     new_recovery_key = new_rk()
-    
+
     # Hash keys before storing (only store hashes, never plaintext)
     sk_hash = hash_key(new_secret_key)
     rk_hash = hash_key(new_recovery_key)
-    
+
     # Extract key IDs for database lookup
     sk_id = extract_key_id(new_secret_key)
     rk_id = extract_key_id(new_recovery_key)
-    
+
     # Create database models with hashed credentials
     new_secret_key_model = SecretKey(
         sk_id=sk_id,
@@ -113,6 +115,20 @@ def new_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists!",
         )
+
+    # Set HttpOnly cookie for secure authentication (matches login flow)
+    # HttpOnly prevents JavaScript access (XSS protection)
+    # Secure flag should be enabled in production (HTTPS only)
+    # SameSite=Strict prevents CSRF attacks
+    response.set_cookie(
+        key="secret_key",
+        value=new_secret_key,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="strict",
+        max_age=365 * 24 * 60 * 60,  # 1 year in seconds
+        path="/",
+    )
 
     # Return plaintext keys to user (only time they're available)
     return NewTokenResponse(sk=new_secret_key, rk=new_recovery_key)
