@@ -1,11 +1,6 @@
 <div align="center">
-<<<<<<< HEAD
-  <img src="assets/logo.svg" alt="OpenX Logo" width="128"/><br/>
-  <h1>OpenX</h1>
-=======
   <img src="assets/icon.svg" alt="OpenX Icon" width="64"/>&nbsp;
   <img src="assets/logo.svg" alt="OpenX Logo" width="300"/><br/>
->>>>>>> b37cdfa (docs(readme): add icon and logo to header, remove text title)
   <p>
     <strong>Communities without boundaries.</strong><br>
     A modern, Reddit-like social platform built with FastAPI.
