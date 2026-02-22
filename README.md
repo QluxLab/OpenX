@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="assets/icon.svg" alt="OpenX Icon" width="64"/>&nbsp;
-  <img src="assets/logo.svg" alt="OpenX Logo" width="300"/><br/>
+  <img src="assets/icon.svg" alt="OpenX Icon" width="128"/>&nbsp;&nbsp;&nbsp;
+  <img src="assets/logo.svg" alt="OpenX Logo" width="300" /><br/>
   <p>
     <strong>Communities without boundaries.</strong><br>
     A modern, Reddit-like social platform built with FastAPI.
@@ -19,7 +19,7 @@
     <img src="https://img.shields.io/badge/Version-1.0.0-8B5CF6?style=for-the-badge" alt="Version" />
 </div>
 
-<br />
+<br/>
 
 ---
 
@@ -227,6 +227,5 @@ Pull requests welcome.
 ---
 
 <div align="center">
-  <p>MIT License</p>
   <img src="https://img.shields.io/badge/Made_with-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
 </div>
