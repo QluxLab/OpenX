@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge" alt="License" />
   </a>
   <a href="https://github.com/QluxLab/OpenX/releases">
-    <img src="https://img.shields.io/badge/Version-1.0.0-8B5CF6?style=for-the-badge" alt="Version" />
+    <img src="https://img.shields.io/badge/Version-1.0.0-8B5CF6?style=for-the-badge" alt="Version" />-->
 </div>
 
 <br/>
